@@ -1,8 +1,10 @@
 package me.final_cataclysm.smarthoppers.mixin;
 
 import me.final_cataclysm.smarthoppers.config.General;
+import me.final_cataclysm.smarthoppers.utils.SimpleContainerInventory;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.animal.horse.AbstractHorse;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
@@ -25,14 +27,13 @@ public abstract class UpperBlockEntityMixin extends BlockEntity {
     public UpperBlockEntityMixin(BlockEntityType<?> type, BlockPos pos, BlockState state) {
         super(type, pos, state);
     }
-
     @Shadow
     public abstract void setCooldown(int pCooldownTime);
 
     @Unique
     private static int getCooldown(int initialValue, UpperBlockEntity blockEntity) {
         if (blockEntity != null) {
-            return General.InsertExtractCooldown2.get();
+            return General.InsertExtractCooldown.get();
         }
         return initialValue;
     }
@@ -42,7 +43,7 @@ public abstract class UpperBlockEntityMixin extends BlockEntity {
     }
     @Redirect(method = "tryMoveInItem", remap = false, at = @At(value = "INVOKE", target = "Luppers/tiles/UpperBlockEntity;setCooldown(I)V"))
     private static void setTransferCooldown(UpperBlockEntity blockEntity, int pCooldownTime) {
-        ((UpperBlockEntityMixin) (Object) blockEntity).setCooldown(General.TransferCooldown2.get());
+        ((UpperBlockEntityMixin) (Object) blockEntity).setCooldown(General.TransferCooldown.get());
     }
     @Inject(
             method = "getContainerAt(Lnet/minecraft/world/level/Level;DDD)Lnet/minecraft/world/Container;",
@@ -51,12 +52,26 @@ public abstract class UpperBlockEntityMixin extends BlockEntity {
                     target = "Lnet/minecraft/world/level/Level;getEntities(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/AABB;Ljava/util/function/Predicate;)Ljava/util/List;"
             ), cancellable = true
     )
-        private static void injectInventoryToUpper(Level world, double x, double y, double z, CallbackInfoReturnable<Inventory> info) {
-        List<Entity> list = world.getEntities((Entity) null, new AABB(x - 0.5D, y - 0.5D, z - 0.5D, x + 0.5D, y + 0.5D, z + 0.5D), entity -> entity instanceof Player);
+    private static void injectInventoryToUpper(Level world, double x, double y, double z, CallbackInfoReturnable<Inventory> info) {
+        List<Entity> list = world.getEntities((Entity) null, new AABB(x - 0.5D, y - 0.5D, z - 0.5D, x + 0.5D, y + 0.5D, z + 0.5D), entity -> hasCompatibleInventory(entity));
 
         if (!list.isEmpty()) {
-            Player entityPlayer = (Player) list.get(world.random.nextInt(list.size()));
-            info.setReturnValue(entityPlayer.getInventory());
+            Entity entity = list.get(world.random.nextInt(list.size()));
+            info.setReturnValue(getInventory(entity));
         }
+    }
+
+    private static Inventory getInventory(Entity entity) {
+        if(entity instanceof Player) {
+            return ((Player) entity).getInventory();
+        }
+        if(entity instanceof AbstractHorse) {
+            return new SimpleContainerInventory(((AbstractHorseInterface)entity).getInventory());
+        }
+        throw new IllegalStateException("Unable to get the inventory from entity of type " + entity.getClass().toString());
+    }
+
+    private static boolean hasCompatibleInventory(Entity entity) {
+        return entity instanceof AbstractHorse || entity instanceof Player;
     }
 }
